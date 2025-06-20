@@ -15,140 +15,85 @@ class MainTabBarController: UITabBarController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        tabBar.tintColor = .black
-        tabBar.unselectedItemTintColor = .lightGray
-        delegate = self
-        setTabBarToTransparent()
-        checkIfUserIsLoggedIn()
-//        handleFindFontName()
-//        let firebaseAuth = Auth.auth()
-//        do {
-//          try firebaseAuth.signOut()
-//        } catch let signOutError as NSError {
-//          print ("Error signing out: %@", signOutError)
-//        }
+        // Standard tab bar appearance
+        tabBar.tintColor = .black // Color for selected item
+        tabBar.unselectedItemTintColor = .gray // Color for unselected items
+        tabBar.backgroundColor = .white // Background color of the tab bar
+        tabBar.isTranslucent = false // Make it opaque
 
+        // Remove default top line (shadow)
+        tabBar.shadowImage = UIImage()
+        tabBar.backgroundImage = UIImage()
+
+        // Add a custom top border line if desired (optional)
+        let topLineView = UIView(frame: CGRect(x: 0, y: 0, width: tabBar.frame.width, height: 0.5))
+        topLineView.backgroundColor = UIColor.lightGray
+        tabBar.addSubview(topLineView)
+
+        delegate = self
+        checkIfUserIsLoggedIn()
     }
     
     
     //MARK: - Properties
-    let tabBarSeperatorTopLine: CALayer = {
-       let tabBarTopLine = CALayer()
-        tabBarTopLine.backgroundColor = UIColor.clear.cgColor
-       return tabBarTopLine
-   }()
-    
-    
-    
-    let progressView: UIProgressView = {
-       let progressView = UIProgressView()
-       progressView.progressTintColor = UIColor.white
-       progressView.trackTintColor = UIColor.lightGray
-       progressView.constrainHeight(constant: 0.75)
-//       progressView.transform = progressView.transform.scaledBy(x: 1, y: 0.5)
-       return progressView
-    }()
-    
+    // Removed tabBarSeperatorTopLine and progressView as they are no longer needed
+    // for the simplified design.
     
     
     //MARK: - Tabbar Delegates
     override func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-        let midtabbar : UITabBarItem = self.tabBar.items![2] as UITabBarItem
-        
-           let index = -(tabBar.items?.firstIndex(of: item)?.distance(to: 0))!
-           item.tag = index
-        if index == 0 {
-            setTabBarToTransparent()
-            progressView.alpha = 1
-            tabBarSeperatorTopLine.backgroundColor = UIColor.clear.cgColor
-            let whiteSongImage = UIImage(named: "music_white")!.withRenderingMode(.alwaysOriginal)
-            midtabbar.image = whiteSongImage
-
-        }  else {
-            restoreTabBar()
-            progressView.alpha = 0
-            tabBarSeperatorTopLine.backgroundColor = UIColor.lightGray.cgColor
-            let blackSongImage = UIImage(named: "song")!.withRenderingMode(.alwaysOriginal)
-            midtabbar.image = blackSongImage
-        }
-        
-
-        
+        // Simplified: No special logic needed for specific tabs anymore in this basic setup.
+        // The default behavior is sufficient.
+        // You can add custom logic per tab index if needed later.
+        // print("Selected tab with tag: \(item.tag)")
     }
-
-    
 
     
     //MARK: - Handlers
 
     func handleSetUpViewControllers() {
-        let selectedFeedImage = handleSetUpTabbarImages(item: "house").last!//UIImage(named: "homeFeedSelected")!.withRenderingMode(.alwaysTemplate)
-        let feedImage = handleSetUpTabbarImages(item: "house").first!//UIImage(named: "homeFeedSelected")!.withRenderingMode(.alwaysTemplate)
-        
-        
-        let homeViewController = handleNavigationControllers(controller: HomeFeedController(), selectedImage: selectedFeedImage, image: feedImage, title: "Home")
-        
-        let searchSelectedImage = handleSetUpTabbarImages(item: "safari").last!//UIImage(named: "searchSelected")!.withRenderingMode(.alwaysTemplate)
-       let searchImage = handleSetUpTabbarImages(item: "safari").first!//UIImage(named: "searchSelected")!.withRenderingMode(.alwaysTemplate)
-               
-        
-        
-        let discoverViewController = handleNavigationControllers(controller: DiscoverVC(collectionViewLayout: UICollectionViewFlowLayout()), selectedImage: searchSelectedImage, image: searchImage, title: "Discover")
-        
-        
-        let createPostSelectedImage = UIImage(named: "song")!.withRenderingMode(.alwaysTemplate)
-        let createPostImage = UIImage(named: "music_white")!.withRenderingMode(.alwaysOriginal)
+        // For You Tab (using existing HomeFeedController)
+        let forYouImage = handleSetUpTabbarImages(item: "house").first!
+        let forYouSelectedImage = handleSetUpTabbarImages(item: "house").last!
+        let forYouVC = HomeFeedController() // Assuming this is the correct controller for "For You"
+        let forYouNavController = handleNavigationControllers(controller: forYouVC, selectedImage: forYouSelectedImage, image: forYouImage, title: "For You", tag: 0)
 
-        
-        let createPostViewController = handleNavigationControllers(controller: UIViewController(), selectedImage: createPostSelectedImage, image: createPostImage, title: nil)
-//        let customTabbarItem = UITabBarItem(title: nil, image: createPostSelectedImage, selectedImage: createPostImage)
-//        createPostViewController.tabBarItem = customTabbarItem
-        
-        
-        
-        let notificationsSelectedImage = handleSetUpTabbarImages(item: "tray").last!//UIImage(named: "notificationsSelectedImage")!.withRenderingMode(.alwaysTemplate)
-       let notificationsImage = handleSetUpTabbarImages(item: "tray").first!//UIImage(named: "notificationsSelectedImage")!.withRenderingMode(.alwaysTemplate)
-                     
-               
-        let notificationsViewController = handleNavigationControllers(controller: NotificationsVC(), selectedImage: notificationsSelectedImage, image: notificationsImage, title: "Inbox")
-        
-        
-        let profileSelectedImage = handleSetUpTabbarImages(item: "person").last!//UIImage(named: "profileSelectedImage")!.withRenderingMode(.alwaysTemplate)
-        let profileImage = handleSetUpTabbarImages(item: "person").first!//UIImage(named: "profileSelectedImage")!.withRenderingMode(.alwaysTemplate)
-                  
-        let profileVC = ProfileViewController(collectionViewLayout: UICollectionViewFlowLayout())
+        // Explore Tab (using existing DiscoverVC)
+        let exploreImage = handleSetUpTabbarImages(item: "safari").first!
+        let exploreSelectedImage = handleSetUpTabbarImages(item: "safari").last!
+        let exploreVC = DiscoverVC(collectionViewLayout: UICollectionViewFlowLayout()) // Assuming this is for "Explore"
+        let exploreNavController = handleNavigationControllers(controller: exploreVC, selectedImage: exploreSelectedImage, image: exploreImage, title: "Explore", tag: 1)
 
-        let profileViewController = handleNavigationControllers(controller: profileVC, selectedImage: profileSelectedImage, image: profileImage, title: "Me")
-        
-        
-        tabBarSeperatorTopLine.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 0.5)
-        tabBar.layer.addSublayer(tabBarSeperatorTopLine)
-        tabBar.clipsToBounds = true
+        // Search Tab (using new SearchViewController)
+        let searchImageSystemName = "magnifyingglass" // SF Symbol for search
+        let searchImageConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium, scale: .medium)
+        let searchImg = UIImage(systemName: searchImageSystemName, withConfiguration: searchImageConfig)!
+        let searchSelectedImg = UIImage(systemName: "\(searchImageSystemName).fill", withConfiguration: searchImageConfig) ?? searchImg // Fallback if fill is not available
 
-           
-        view.insertSubview(progressView, aboveSubview: tabBar)
-        progressView.constrainToLeft(paddingLeft: -3)
-        progressView.constrainToRight(paddingRight: 3)
-        progressView.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0).isActive = true
-        
-        
-        viewControllers = [homeViewController, discoverViewController, createPostViewController, notificationsViewController, profileViewController]
-        
-        guard let items = self.tabBar.items else {return}
-        for (index, element) in items.enumerated() {
-            if index == 2 {
-                element.imageInsets = UIEdgeInsets(top: 5, left: 0, bottom: -5, right: 0)
-            }
-        }
+        // Need to import SearchViewController, assuming it's in the "TikTok.Controllers.Search" module or similar
+        // For now, let's assume the project name is TikTok and it's directly accessible.
+        // If `SearchViewController` is in a module like `TikTok.SearchViewController`, adjust accordingly.
+        // The file `SearchViewController.swift` was created in `TikTok/Controllers/Search/SearchViewController.swift`
+        // Make sure the project is configured to find it.
+        let searchVC = SearchViewController()
+        let searchNavController = handleNavigationControllers(controller: searchVC, selectedImage: searchSelectedImg, image: searchImg, title: "Search", tag: 2)
 
+        viewControllers = [forYouNavController, exploreNavController, searchNavController]
+
+        // No special image insets needed for a simple 3-tab layout
     }
     
     
-    func handleNavigationControllers(controller: UIViewController, selectedImage: UIImage, image: UIImage, title: String?) -> UINavigationController {
+    // Updated to assign a tag to the tabBarItem for potential use in `didSelect`
+    func handleNavigationControllers(controller: UIViewController, selectedImage: UIImage, image: UIImage, title: String?, tag: Int) -> UINavigationController {
+        // Assuming MyNavigationController exists and is a custom UINavigationController.
+        // If not, use a standard UINavigationController.
+        // let navController = UINavigationController(rootViewController: controller)
         let navController = MyNavigationController(rootViewController: controller)
         navController.tabBarItem.image = image
         navController.tabBarItem.selectedImage = selectedImage
         navController.tabBarItem.title = title
+        navController.tabBarItem.tag = tag // Assign tag
         return navController
     }
     
@@ -156,27 +101,18 @@ class MainTabBarController: UITabBarController {
     
   
     fileprivate func handleSetUpTabbarImages(item: String) -> [UIImage] {
-        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold, scale: .medium)
-        let normalImage = UIImage(systemName: item, withConfiguration: symbolConfig)!
-        let selectedImage = UIImage(systemName: "\(item).fill", withConfiguration: symbolConfig)!
+        // Using a slightly less bold weight for a more standard look, adjust as needed
+        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium, scale: .medium)
+        guard let normalImage = UIImage(systemName: item, withConfiguration: symbolConfig),
+              let selectedImage = UIImage(systemName: "\(item).fill", withConfiguration: symbolConfig) else {
+            // Fallback to a default icon if system icons fail (e.g., name typo)
+            return [UIImage(systemName: "questionmark.circle")!, UIImage(systemName: "questionmark.circle.fill")!]
+        }
         return [normalImage, selectedImage]
     }
     
-    func setTabBarToTransparent() {
-        tabBar.tintColor = .white
-        tabBar.unselectedItemTintColor = UIColor.white.withAlphaComponent(0.7)
-        tabBar.backgroundImage = UIImage()
-        tabBar.backgroundColor = .clear
-        tabBar.shadowImage = UIImage() //this removes the tabbar controller's top line
-    }
-    
-    
-    
-    func restoreTabBar() {
-        tabBar.tintColor = .black
-        tabBar.unselectedItemTintColor = .lightGray
-        tabBar.backgroundColor = .white
-    }
+    // Removed setTabBarToTransparent and restoreTabBar as we are using a standard appearance now.
+    // If transparency is needed later, these can be re-added or modified.
     
     
     
@@ -208,18 +144,19 @@ extension MainTabBarController : UITabBarControllerDelegate {
     
     
     func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
-        let index = viewControllers?.firstIndex(of: viewController)
-        if index == 2 {
-            let createPostVC = CreatePostVC()
-//            createPostVC.modalPresentationStyle = .fullScreen
-            let navController = UINavigationController(rootViewController: createPostVC)
-            navController.modalPresentationStyle = .fullScreen
-            present(navController, animated: true, completion: nil)
-            return false
-        }
+        // Removed the logic that presented CreatePostVC modally.
+        // All tabs are now selectable directly.
         return true
     }
 }
 
 
+// Assuming MyNavigationController.swift exists. If not, it should be created or replaced with UINavigationController.
+// Example:
+// class MyNavigationController: UINavigationController {
+//     override func viewDidLoad() {
+//         super.viewDidLoad()
+//         // Custom navigation bar appearance if needed
+//     }
+// }
 

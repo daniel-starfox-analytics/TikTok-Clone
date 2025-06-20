@@ -1,0 +1,4 @@
+id,name,videoURL,brandID,productPageURL,utm_source,utm_medium,utm_campaign
+prod1,Air Max Alpha,video1.mp4,brand1,https://nike.com/airmaxalpha,drop_app,video,airmax
+prod2,Superstar Shoes,video2.mp4,brand2,https://adidas.com/superstar,drop_app,video,superstar
+prod3,Future Rider,video3.mp4,brand3,https://puma.com/futurerider,drop_app,video,futurerider

@@ -14,10 +14,14 @@
 //
 
 import UIKit
+
+// Define or update the delegate protocol
 protocol VerticalFeedCellDelegate: AnyObject {
-    func didTapPlayButton(play: Bool)
+    func didTapPlayButton(play: Bool, cell: VerticalFeedCell) // Pass cell for context if needed by controller
     func handleDidTapExitController(cell: VerticalFeedCell)
-    func didTapCommentTextViewInCell(currentCell: VerticalFeedCell)
+    // func didTapCommentTextViewInCell(currentCell: VerticalFeedCell) // Commented out as per previous changes
+    func didTapLikeButton(for post: TikTok.Models.Post, cell: VerticalFeedCell)
+    func didTapViewProduct(for post: TikTok.Models.Post, cell: VerticalFeedCell) // New delegate method for product view
 }
 
 class VerticalFeedCell: UICollectionViewCell {
@@ -48,35 +52,63 @@ class VerticalFeedCell: UICollectionViewCell {
     weak var delegate: VerticalFeedCellDelegate?
     fileprivate let kRotationAnimationKey = "com.myapplication.rotationanimationkey" // Any key
 
-    var post: Post? {
+    // Changed to use the new Post model from TikTok/Models/Post.swift
+    var post: TikTok.Models.Post? { // Assuming TikTok is the project name for module resolution
         didSet {
-            guard let postUnwrapped = post, let url = URL(string: postUnwrapped.postImageUrl) else {return}
-            postImageView.kf.setImage(with: url)
-            postImageView.kf.indicatorType = .activity
+            guard let postUnwrapped = post else { return }
+
+            // Video thumbnail: Original used post.postImageUrl.
+            // New Post model doesn't have a direct thumbnail image URL from Product.
+            // For now, set placeholder or clear the image.
+            // A proper solution would involve adding a thumbnail property to Product/Post.
+            postImageView.image = nil // Or some placeholder
+            postImageView.backgroundColor = .darkGray // Placeholder background
+            // Ensure Kingfisher doesn't try to load an old image if cell is reused
+            postImageView.kf.cancelDownloadTask()
+
+
+            // Profile Image
+            if let profileImageStr = postUnwrapped.user.profileImageURL, !profileImageStr.isEmpty, let profileUrl = URL(string: profileImageStr) {
+                profileImageView.kf.indicatorType = .activity
+                profileImageView.kf.setImage(with: profileUrl, placeholder: UIImage(systemName: "person.circle.fill"))
+            } else {
+                profileImageView.image = UIImage(systemName: "person.circle.fill") // Default placeholder
+                profileImageView.kf.cancelDownloadTask()
+            }
             
+            // Username
+            usernameLabel.text = "@\(postUnwrapped.user.username)"
             
-            guard let profileImageUrl = URL(string: postUnwrapped.user.profileImageUrl) else {return}
-            profileImageView.kf.indicatorType = .activity
-            profileImageView.kf.setImage(with: profileImageUrl)
+            // Caption
+            captionLabel.text = postUnwrapped.caption ?? "" // Use empty string if caption is nil
             
+            // Counts - using new Post model properties
             loveCountLabel.text = postUnwrapped.likes.formatUsingAbbrevation()
-            commentCountLabel.text = postUnwrapped.commentCount.formatUsingAbbrevation()
-            shareCountLabel.text = postUnwrapped.views.formatUsingAbbrevation()
+            commentCountLabel.text = postUnwrapped.commentsCount.formatUsingAbbrevation()
+            shareCountLabel.text = postUnwrapped.sharesCount.formatUsingAbbrevation()
             
+            // Artist image view (spinning disc)
+            // Using user's profile image (brand logo) for the spinning disc for now.
+            if let brandLogoStr = postUnwrapped.user.profileImageURL, !brandLogoStr.isEmpty, let brandLogoUrl = URL(string: brandLogoStr) {
+                 artistImageView.kf.indicatorType = .activity
+                 artistImageView.kf.setImage(with: brandLogoUrl, placeholder: UIImage(systemName: "music.note"))
+            } else {
+                artistImageView.image = UIImage(systemName: "music.note") // Placeholder
+                artistImageView.kf.cancelDownloadTask()
+            }
             
-            let artistImageUrlString = "https://i.ytimg.com/vi/qHeqUnvWbhc/maxresdefault.jpg"//post?.postImageUrl ?? ""
-            guard let artistImageUrl = URL(string: artistImageUrlString) else {return}
-            artistImageView.kf.setImage(with: artistImageUrl)
-
+            // Music Title Label
+            // Using product name as aplaceholder for the sound title.
+            musicTitleLabel.text = postUnwrapped.caption ?? "Original Sound"
             
-            
-
+            // Update like button state
+            updateLikeButtonAppearance()
         }
     }
     
      let postImageView: UIImageView = {
         let imageView = UIImageView()
-        imageView.contentMode = .scaleAspectFit//scaleAspectFill
+        imageView.contentMode = .scaleAspectFill // Changed to scaleAspectFill for better video presentation
         imageView.clipsToBounds = true
         return imageView
     }()
@@ -102,10 +134,11 @@ class VerticalFeedCell: UICollectionViewCell {
     
     fileprivate let loveButton: UIButton = {
         let button = UIButton(type: .system)
-        let image = UIImage(named: "heart")
-        button.setImage(image?.withRenderingMode(.alwaysTemplate), for: .normal)
+        let image = UIImage(systemName: "heart.fill") // Using SF Symbol
+        button.setImage(image, for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.tintColor = .white
+        button.addTarget(self, action: #selector(handleLikeTapped), for: .touchUpInside) // Added target
         return button
     }()
     
@@ -119,31 +152,35 @@ class VerticalFeedCell: UICollectionViewCell {
         return label
     }()
     
-    
-    
-    fileprivate let commentButton: UIButton = {
+    // Shop Button (New)
+    fileprivate let shopButton: UIButton = {
         let button = UIButton(type: .system)
-        let image = UIImage(named: "commentIcon")
-        button.setImage(image?.withRenderingMode(.alwaysTemplate), for: .normal)
+        let image = UIImage(systemName: "bag.fill") // SF Symbol for shopping bag
+        button.setImage(image, for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.tintColor = .white
+        // No target action for now
+        return button
+    }()
+
+    // Save Button (New)
+    fileprivate let saveButton: UIButton = {
+        let button = UIButton(type: .system)
+        let image = UIImage(systemName: "bookmark.fill") // SF Symbol for save/bookmark
+        button.setImage(image, for: .normal)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.tintColor = .white
+        // No target action for now
         return button
     }()
     
-    
-    fileprivate let commentCountLabel: UILabel = {
-       let label = UILabel()
-       label.text = "10.2K"
-       label.textColor = .white
-       label.font = UIFont.boldSystemFont(ofSize: 12.5)
-       label.translatesAutoresizingMaskIntoConstraints = false
-       return label
-   }()
-    
+    // Comment button and label are removed as per requirements.
+    // fileprivate let commentButton: UIButton = ... (Removed)
+    // fileprivate let commentCountLabel: UILabel = ... (Removed)
    
     fileprivate let shareButton: UIButton = {
         let button = UIButton(type: .system)
-        let image = UIImage(named: "shareIcon")
+        let image = UIImage(systemName: "arrowshape.turn.up.right.fill") // SF Symbol for share
         button.setImage(image?.withRenderingMode(.alwaysTemplate), for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.tintColor = .white
@@ -217,16 +254,28 @@ class VerticalFeedCell: UICollectionViewCell {
     fileprivate let musicTitleLabel: UILabel = {
         let label = UILabel()
          label.font = UIFont.systemFont(ofSize: 13.5)
-         label.text = "Let Link - @WhoHeem"
+         label.text = "Original Sound - Artist Name" // Placeholder, will be updated by post data
          label.textColor = .white
-//        label.backgroundColor = .red
         return label
     }()
     
+    // View Product Button (New)
+    fileprivate lazy var viewProductButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("View Product", for: .normal)
+        button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 14)
+        button.setTitleColor(.white, for: .normal)
+        button.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        button.layer.cornerRadius = 5
+        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(handleViewProductTapped), for: .touchUpInside)
+        return button
+    }()
     
     fileprivate let pausePlayButton: UIButton = {
         let button = UIButton(type: .system)
-        let image = UIImage(named: "play")
+        let image = UIImage(named: "play") // This is an old asset name, consider SF Symbol if "play" doesn't exist
         button.setImage(image?.withRenderingMode(.alwaysTemplate), for: .normal)
         button.tintColor = UIColor.white.withAlphaComponent(0.4)
         button.alpha = 0
@@ -304,22 +353,29 @@ class VerticalFeedCell: UICollectionViewCell {
     fileprivate func setUpSubViews() {
         addSubview(postImageView)
         addSubview(discJockeyView)
-        addSubview(commentInputAccessoryView)
-        commentInputAccessoryView.addSubview(commentTextViewTapGestureView)
-        addSubview(progressView)
+        // commentInputAccessoryView and commentTextViewTapGestureView are not added if comments are removed
+        // addSubview(commentInputAccessoryView)
+        // commentInputAccessoryView.addSubview(commentTextViewTapGestureView)
+        addSubview(progressView) // Keep progress view for video loading indication if needed
+
+        // Add new buttons to the view hierarchy
+        addSubview(shopButton)
+        addSubview(saveButton)
+
         addSubview(shareButton)
         addSubview(shareCountLabel)
-        addSubview(commentButton)
-        addSubview(commentCountLabel)
+        // addSubview(commentButton) // Removed
+        // addSubview(commentCountLabel) // Removed
         addSubview(loveButton)
         addSubview(loveCountLabel)
         addSubview(profileImageView)
-        addSubview(addButton)
+        addSubview(addButton) // This will be our "Follow Brand" button
         discJockeyView.addSubview(artistImageView)
         addSubview(musicIcon)
         addSubview(musicTitleLabel)
         addSubview(captionLabel)
         addSubview(usernameLabel)
+        addSubview(viewProductButton) // Add new button
         insertSubview(pausePlayButton, aboveSubview: postImageView)
         insertSubview(backTapGestureView, aboveSubview: postImageView)
         backTapGestureView.addSubview(backButton)
@@ -334,71 +390,87 @@ class VerticalFeedCell: UICollectionViewCell {
 
         discJockeyView.anchor(top: nil, leading: nil, bottom: bottomAnchor, trailing: trailingAnchor, padding: .init(top: 0, left: 0, bottom: height + 15 , right: 8), size: .init(width: 50, height: 50))
 
-        commentInputAccessoryView.anchor(top: nil, leading: leadingAnchor, bottom: bottomAnchor, trailing: trailingAnchor, padding: .init(top: 0, left: 0, bottom: 0, right: 0), size: .init(width: 0, height: height))
-        
-        commentTextViewTapGestureView.fillSuperview()
+        // commentInputAccessoryView.anchor... (Removed)
+        // commentTextViewTapGestureView.fillSuperview() (Removed)
        
-        progressView.anchor(top: nil, leading: leadingAnchor, bottom: commentInputAccessoryView.topAnchor, trailing: trailingAnchor)
+        // Anchor progressView to bottom of the cell, or above tab bar if accessory view is truly gone
+        progressView.anchor(top: nil, leading: leadingAnchor, bottom: bottomAnchor, trailing: trailingAnchor, padding: .init(top: 0, left: 0, bottom: height, right: 0) ) // Assuming height is tabbar height
         
-        
+
+        // --- Vertical Stack of Icons ---
+        // Disc Jockey View (Spinning Brand Logo) - Stays at the bottom of the stack
+        discJockeyView.anchor(top: nil, leading: nil, bottom: bottomAnchor, trailing: trailingAnchor, padding: .init(top: 0, left: 0, bottom: height + 15 , right: 8), size: .init(width: 50, height: 50))
+
+        // Share Button & Label
         shareButton.centerXAnchor.constraint(equalTo: discJockeyView.centerXAnchor).isActive = true
-        shareButton.bottomAnchor.constraint(equalTo: discJockeyView.topAnchor, constant: -45).isActive = true
+        shareButton.bottomAnchor.constraint(equalTo: discJockeyView.topAnchor, constant: -25).isActive = true // Adjusted spacing
         shareButton.constrainHeight(constant: 33)
         shareButton.constrainWidth(constant: 33)
-         
-          
-          
-       shareCountLabel.centerXAnchor.constraint(equalTo: shareButton.centerXAnchor).isActive = true
-       shareCountLabel.topAnchor.constraint(equalTo: shareButton.bottomAnchor, constant: 5).isActive = true
-    
-      commentButton.centerXAnchor.constraint(equalTo: discJockeyView.centerXAnchor).isActive = true
-      commentButton.bottomAnchor.constraint(equalTo: shareButton.topAnchor, constant: -45).isActive = true
-      commentButton.constrainHeight(constant: 33)
-      commentButton.constrainWidth(constant: 33)
+
+        shareCountLabel.centerXAnchor.constraint(equalTo: shareButton.centerXAnchor).isActive = true
+        shareCountLabel.topAnchor.constraint(equalTo: shareButton.bottomAnchor, constant: 5).isActive = true
+
+        // Save Button (New) - No label for this one
+        saveButton.centerXAnchor.constraint(equalTo: discJockeyView.centerXAnchor).isActive = true
+        saveButton.bottomAnchor.constraint(equalTo: shareButton.topAnchor, constant: -25).isActive = true // Place above Share
+        saveButton.constrainHeight(constant: 33)
+        saveButton.constrainWidth(constant: 33)
+
+        // Shop Button (New) - No label for this one
+        shopButton.centerXAnchor.constraint(equalTo: discJockeyView.centerXAnchor).isActive = true
+        shopButton.bottomAnchor.constraint(equalTo: saveButton.topAnchor, constant: -25).isActive = true // Place above Save
+        shopButton.constrainHeight(constant: 33)
+        shopButton.constrainWidth(constant: 33)
             
-      commentCountLabel.centerXAnchor.constraint(equalTo: commentButton.centerXAnchor).isActive = true
-      commentCountLabel.topAnchor.constraint(equalTo: commentButton.bottomAnchor, constant: 5).isActive = true
-              
-        
-        
+        // Love Button & Label
         loveButton.centerXAnchor.constraint(equalTo: discJockeyView.centerXAnchor).isActive = true
-        loveButton.bottomAnchor.constraint(equalTo: commentButton.topAnchor, constant: -45).isActive = true
+        loveButton.bottomAnchor.constraint(equalTo: shopButton.topAnchor, constant: -25).isActive = true // Place above Shop
         loveButton.constrainHeight(constant: 35)
         loveButton.constrainWidth(constant: 35)
-        
-        
+
         loveCountLabel.centerXAnchor.constraint(equalTo: loveButton.centerXAnchor).isActive = true
         loveCountLabel.topAnchor.constraint(equalTo: loveButton.bottomAnchor, constant: 5).isActive = true
     
-             
-        
-        
+        // Profile Image View (Brand Logo)
         profileImageView.centerXAnchor.constraint(equalTo: discJockeyView.centerXAnchor).isActive = true
-        profileImageView.bottomAnchor.constraint(equalTo: loveButton.topAnchor, constant: -45).isActive = true
+        profileImageView.bottomAnchor.constraint(equalTo: loveButton.topAnchor, constant: -25).isActive = true // Place above Love
         profileImageView.constrainHeight(constant: 50)
         profileImageView.constrainWidth(constant: 50)
         
+        // Add Button (Follow Brand Button) - Repurposed, ensure icon is updated
+        // Using SF Symbol "plus.circle.fill" for the follow button icon
+        let plusImage = UIImage(systemName: "plus.circle.fill")?.withTintColor(.white, renderingMode: .alwaysOriginal)
+        addButton.setImage(plusImage, for: .normal) // Changed icon
+        addButton.backgroundColor = .darkGray // Example to make it more visible if icon is simple
+        addButton.layer.cornerRadius = 11 // Make it circular if it's 22x22
         
         addButton.centerXAnchor.constraint(equalTo: profileImageView.centerXAnchor).isActive = true
-        addButton.topAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: -10.5).isActive = true
+        // Position it slightly overlapping or just below the profileImageView
+        addButton.centerYAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: -5).isActive = true
         addButton.constrainHeight(constant: 22)
         addButton.constrainWidth(constant: 22)
            
-        
-      artistImageView.centerInSuperview(size: .init(width: 30, height: 30))
+        artistImageView.centerInSuperview(size: .init(width: 30, height: 30))
 
-            
-        musicIcon.anchor(top: nil, leading: leadingAnchor, bottom: discJockeyView.bottomAnchor, trailing: nil, padding: .init(top: 0, left: 5, bottom: 0, right: 0), size: .init(width: 15, height: 15))
+        // --- Bottom Left Info ---
+        musicIcon.anchor(top: nil, leading: leadingAnchor, bottom: bottomAnchor, trailing: nil, padding: .init(top: 0, left: 5, bottom: height + 15, right: 0), size: .init(width: 15, height: 15))
         
-        musicTitleLabel.anchor(top: nil, leading: musicIcon.trailingAnchor, bottom: nil, trailing: nil, padding: .init(top: 0, left: 5, bottom: 0, right: 0), size: .init(width: frame.width / 2, height: 0))
-        
+        musicTitleLabel.anchor(top: nil, leading: musicIcon.trailingAnchor, bottom: nil, trailing: discJockeyView.leadingAnchor, padding: .init(top: 0, left: 5, bottom: 0, right: 8))
         musicTitleLabel.centerYAnchor.constraint(equalTo: musicIcon.centerYAnchor, constant: -1.3).isActive = true
         
         captionLabel.anchor(top: nil, leading: leadingAnchor, bottom: musicIcon.topAnchor, trailing: discJockeyView.leadingAnchor, padding: .init(top: 0, left: 5, bottom: 10, right: 8))
-//
         usernameLabel.anchor(top: nil, leading: captionLabel.leadingAnchor, bottom: captionLabel.topAnchor, trailing: captionLabel.trailingAnchor, padding: .init(top: 0, left: 0, bottom: 10, right: 0))
         
-        
+        // Layout for viewProductButton (below captionLabel)
+        viewProductButton.anchor(top: nil, leading: captionLabel.leadingAnchor, bottom: captionLabel.topAnchor, trailing: nil, padding: .init(top: 0, left: 0, bottom: -35, right: 0)) // Place it below caption by spacing
+        // Or, more robustly, anchor its top to captionLabel.bottomAnchor:
+        // viewProductButton.topAnchor.constraint(equalTo: captionLabel.bottomAnchor, constant: 8).isActive = true
+        // viewProductButton.leadingAnchor.constraint(equalTo: captionLabel.leadingAnchor).isActive = true
+
+        // Re-anchoring viewProductButton to be above captionLabel and usernameLabel for better visibility
+        viewProductButton.anchor(top: nil, leading: leadingAnchor, bottom: usernameLabel.topAnchor, trailing: nil, padding: .init(top: 0, left: 8, bottom: 8, right: 0))
+
+
         pausePlayButton.centerInSuperview(size: .init(width: 60, height: 60))
         
         backTapGestureView.anchor(top: topAnchor, leading: leadingAnchor, bottom: nil, trailing: nil, padding: .init(top: 20, left: 0, bottom: 0, right: 0), size: .init(width: 60, height: 44))
@@ -441,15 +513,47 @@ class VerticalFeedCell: UICollectionViewCell {
     @objc fileprivate func handleDidTapPausePlayButton() {
         if pausePlayButton.alpha == 0 {
             pausePlayButton.alpha = 1
-            delegate?.didTapPlayButton(play: false)
+            delegate?.didTapPlayButton(play: false, cell: self)
             stopRotatingView(view: discJockeyView)
         } else {
             pausePlayButton.alpha = 0
-            delegate?.didTapPlayButton(play: true)
+            delegate?.didTapPlayButton(play: true, cell: self)
             rotateView(view: discJockeyView)
         }
     }
     
+    @objc fileprivate func handleViewProductTapped() {
+        guard let currentPost = post else { return }
+        delegate?.didTapViewProduct(for: currentPost, cell: self)
+    }
+
+    @objc fileprivate func handleLikeTapped() {
+        guard var currentPost = post else { return }
+        currentPost.isLiked.toggle()
+        if currentPost.isLiked {
+            currentPost.likes += 1
+        } else {
+            currentPost.likes -= 1
+        }
+        post = currentPost // Assign back to trigger didSet and update UI elements if needed, or update directly
+
+        updateLikeButtonAppearance()
+        loveCountLabel.text = currentPost.likes.formatUsingAbbrevation() // Update count label
+
+        delegate?.didTapLikeButton(for: currentPost, cell: self)
+    }
+
+    func updateLikeButtonAppearance() {
+        if post?.isLiked == true {
+            loveButton.tintColor = .red // Or your app's like color
+            // Optionally change the image to a filled heart if using different images for selected state
+            // loveButton.setImage(UIImage(systemName: "heart.fill"), for: .normal)
+        } else {
+            loveButton.tintColor = .white
+            // loveButton.setImage(UIImage(systemName: "heart"), for: .normal) // SF Symbol for unfilled heart
+        }
+    }
+
     
     
     func handleRotateDiscJockey() {
