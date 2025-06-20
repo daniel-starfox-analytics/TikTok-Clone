@@ -10,6 +10,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleDisplayName</key>
+	<string>DROP</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
@@ -27,7 +29,7 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>This lets you save and download photos from Tiktok to your phone</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This lets you pick photos and videos to share on TikTok</string>
+	<string>This lets you pick photos and videos to share for product showcases.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>sounds  good.ttf</string>

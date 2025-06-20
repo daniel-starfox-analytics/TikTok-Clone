@@ -9,8 +9,14 @@
 import UIKit
 import AVKit
 import Lottie
-import Firebase
-let paddingForTabbar: CGFloat = 30//29.5
+// import Firebase // Firebase is no longer needed here
+
+//let paddingForTabbar: CGFloat = 30 // This might not be needed if cells account for tab bar
+
+// Using the new Post model
+typealias PostDataModel = TikTok.Models.Post
+typealias UserDataModel = TikTok.Models.User
+
 class HomeFeedController: UIViewController {
     
     //MARK: Init
@@ -18,343 +24,483 @@ class HomeFeedController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = UIColor.black
         navigationController?.navigationBar.isHidden = true
-        setUpViews()
-        handleFetchCurrentUser()
+        setupVerticalCollectionView()
+        loadMockData() // Initial load respects preferences
         
+        // Add observer for Buy Now button tap from overlay
+        NotificationCenter.default.addObserver(self, selector: #selector(handleBuyNowNotification(_:)), name: .init("ProductDetailsOverlayBuyNowTapped"), object: nil)
+    }
+
+    // MARK: - Brand Preferences Properties
+    private var scrollCountSinceLastPrompt = 0
+    private let scrollsNeededForPrompt = 3 // Show prompt after 3 full page scrolls
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
+    @objc private func handleBuyNowNotification(_ notification: Notification) {
+        guard let userInfo = notification.userInfo, let urlString = userInfo["url"] as? String, let url = URL(string: urlString) else {
+            return
+        }
+        // Could use SFSafariViewController for in-app browsing
+        // For now, just open in default browser
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        } else {
+            print("Cannot open URL: \(urlString)")
+        }
+    }
     
     override func viewWillDisappear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+        super.viewWillDisappear(animated)
         player.pause()
+        // Stop disc animation for current cell if any
+        if let cell = currentVerticalCell {
+            cell.stopRotatingView(view: cell.discJockeyView)
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if isPlaying == true {
+        // Attempt to play only if the view is fully visible and a cell is active
+        if isPlaying, let cell = currentVerticalCell {
             player.play()
-            if let cell = currentVerticalCell {
-                cell.rotateView(view: cell.discJockeyView)
-            }
+            cell.rotateView(view: cell.discJockeyView)
+        } else {
+            // If not already playing, try to play the current cell upon appearing
+             playVideoForVisibleCells()
         }
     }
-    
-    
-//    override var prefersStatusBarHidden: Bool {
-//      return true
-//    }
-    
     
     //MARK: - Properties
     fileprivate var isPlaying = false
     var timeObserverToken: Any?
     weak var currentVerticalCell: VerticalFeedCell?
-
+    private var mockDataService = MockDataService()
     
-    var currentUser: User? {
+    // Using the new PostDataModel (TikTok.Models.Post)
+    fileprivate var posts: [PostDataModel] = [] {
         didSet {
-            handleFetchPost()
-        }
-    }
-   
-//   fileprivate let urlString = "https://firebasestorage.googleapis.com/v0/b/lens-e2a52.appspot.com/o/lens_videos%2F2A84A207-2BFB-45AB-BC78-1D253AA49364.mov?alt=media&token=8c228898-3b6f-4f14-8e91-f444a68ab802"
-    
-    
-    //"https://firebasestorage.googleapis.com/v0/b/lens-e2a52.appspot.com/o/lens_videos%2F5AA53A16-FD53-49D5-AAD8-62179AE571DD.mov?alt=media&token=6fe264f8-b557-49a7-8498-df17ff52bb44"
-    
-    //"https://firebasestorage.googleapis.com/v0/b/digmeproject.appspot.com/o/post_videos%2F6FB30940-05A6-40DC-8264-5241A0739259.mov?alt=media&token=042aff2f-992e-4391-b3b6-45999aa9bf20"
-    
-    // "https://firebasestorage.googleapis.com/v0/b/digmeproject.appspot.com/o/post_videos%2F0666A3C1-CA8A-465F-A11D-ABB23884331F.mov?alt=media&token=56923b7d-e028-41d6-ac5e-42e4fd0ca275"
-    
-    
-    fileprivate var posts: [Post] = [Post]() {
-        didSet {
-            collectionView.reloadData()
+            verticalCollectionView.reloadData()
+            // Attempt to play the first video if data loads and not already playing
+            // and if the view is currently visible (important for when preferences change)
+            if !posts.isEmpty && player.currentItem == nil && self.view.window != nil {
+                 playVideoForVisibleCells()
+            }
         }
     }
 
-    
-    let FOLLOWING_CELL_ID = "FOLLOWINGCELLID"
-    let FORYOU_CELL_ID = "FORYOUCELLID"
+    let VERTICAL_CELL_ID = "VERTICALCELLID"
 
-     lazy var collectionView: UICollectionView = {
+    lazy var verticalCollectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
-        layout.scrollDirection = .horizontal
-        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.delegate = self
-        collectionView.dataSource = self
-        collectionView.isPagingEnabled = true
-        collectionView.showsHorizontalScrollIndicator = false
-        collectionView.backgroundColor = .clear
-        return collectionView
+        layout.scrollDirection = .vertical
+        let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        cv.delegate = self
+        cv.dataSource = self
+        cv.isPagingEnabled = true
+        cv.showsVerticalScrollIndicator = false
+        cv.backgroundColor = .clear
+        return cv
     }()
     
-    
-    lazy var tikTokMenuBar: TikTokMenuBar = {
-        let tikTokMenuBar = TikTokMenuBar()
-        tikTokMenuBar.homeFeedController = self
-        return tikTokMenuBar
-    }()
-    
+    // Removed tikTokMenuBar
     
     lazy var player: AVPlayer = {
         let player = AVPlayer()
         return player
     }()
     
-    
     lazy var playerLayer: AVPlayerLayer = {
         let playerLayer = AVPlayerLayer()
         return playerLayer
     }()
     
-    
     lazy var loadingAnimation: AnimationView = {
         let animationView = AnimationView(name: "TikTokLoadingAnimation")
         animationView.translatesAutoresizingMaskIntoConstraints = false
-        animationView.animationSpeed = 1//0.8
+        animationView.animationSpeed = 1
         animationView.loopMode = .loop
         return animationView
     }()
     
     //MARK: - Handlers
-    fileprivate func setUpViews() {
-        view.addSubview(collectionView)
-        collectionView.fillSuperview(padding: .init(top: 0, left: 0, bottom: -paddingForTabbar, right: 0))
-        collectionView.register(BaseHomeFeedCell.self, forCellWithReuseIdentifier: FOLLOWING_CELL_ID)
-        collectionView.register(BaseHomeFeedCell.self, forCellWithReuseIdentifier: FORYOU_CELL_ID)
+    fileprivate func setupVerticalCollectionView() {
+        view.addSubview(verticalCollectionView)
+        // Adjust bottom padding to account for tab bar if necessary
+        let tabBarHeight = self.tabBarController?.tabBar.frame.height ?? 49.0
+        verticalCollectionView.fillSuperview(padding: .init(top: 0, left: 0, bottom: -tabBarHeight, right: 0)) // Ensure cells are full screen
+        verticalCollectionView.register(VerticalFeedCell.self, forCellWithReuseIdentifier: VERTICAL_CELL_ID)
 
-        view.addSubview(tikTokMenuBar)
-        tikTokMenuBar.anchor(top: view.safeAreaLayoutGuide.topAnchor, leading: view.leadingAnchor, bottom: nil, trailing: view.trailingAnchor, padding: .init(top: 5, left: 0, bottom: 0, right: 0), size: .init(width: 0, height: 35)) //top: 25
-        
         view.addSubview(loadingAnimation)
         loadingAnimation.centerInSuperview(size: .init(width: 50, height: 50))
-        loadingAnimation.play()
+        // Don't play loading animation by default, only when actually loading
+        loadingAnimation.isHidden = true
     }
     
-    
-    
+    fileprivate func loadMockData() {
+        handlePlayAnimation(show: true)
+
+        var fetchedProducts = mockDataService.fetchProducts()
+        let fetchedBrands = mockDataService.fetchBrands()
+        let selectedBrandIDs = UserPreferences.shared.getSelectedBrandIDs()
+
+        // Filter products if brand preferences are set and not empty
+        if !selectedBrandIDs.isEmpty {
+            fetchedProducts = fetchedProducts.filter { selectedBrandIDs.contains($0.brandID) }
+        }
+
+        // If after filtering, no products match, we might want to show all products as a fallback
+        // or show a specific message. For now, if filter results in empty, it will show empty.
+        // Consider: if fetchedProducts.isEmpty && !selectedBrandIDs.isEmpty { fetchedProducts = mockDataService.fetchProducts() }
+
+
+        var tempPosts: [PostDataModel] = []
+        for product in fetchedProducts {
+            let brandForProduct = fetchedBrands.first(where: { $0.id == product.brandID })
+            let mockUser = UserDataModel(
+                id: product.brandID,
+                username: brandForProduct?.name ?? "Unknown Brand",
+                profileImageURL: brandForProduct?.logoURL
+            )
+            let post = PostDataModel(
+                id: product.id,
+                videoURL: product.videoURL,
+                user: mockUser,
+                caption: product.name,
+                likes: Int.random(in: 10...1000), // Initialized likes
+                commentsCount: Int.random(in: 0...500),
+                sharesCount: Int.random(in: 0...300),
+                isLiked: false, // Initialized isLiked
+                productID: product.id,
+                timestamp: Date()
+            )
+            tempPosts.append(post)
+        }
+
+        // Stop current video before reloading data
+        if player.rate != 0 {
+            player.pause()
+            currentVerticalCell?.stopRotatingView(view: currentVerticalCell!.discJockeyView)
+            removePeriodicTimeObserver() // Clean up player state
+        }
+        currentVerticalCell = nil // Reset current cell
+
+        self.posts = tempPosts
+        handlePlayAnimation(show: false)
+
+        // After loading data, reset collection view to the top if it's not empty
+        if !self.posts.isEmpty {
+            self.verticalCollectionView.setContentOffset(.zero, animated: false)
+             // Crucially, after data reload and potential scroll to top,
+             // explicitly try to play the first video if view is visible.
+            DispatchQueue.main.async { // Ensure layout is complete
+                 if self.view.window != nil { // Check if view is visible
+                    self.playVideoForVisibleCells()
+                 }
+            }
+        }
+    }
+
     fileprivate func handlePlayAnimation(show: Bool) {
         if show {
             loadingAnimation.isHidden = false
             loadingAnimation.play()
-
         } else {
-            
-//            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-            if loadingAnimation.isHidden == true {
-                return
-            }
-                loadingAnimation.pause()
-                loadingAnimation.isHidden = true
-//            }
+            loadingAnimation.pause()
+            loadingAnimation.isHidden = true
         }
     }
     
-    func handleFetchCurrentUser() {
-       guard let currentUid = Auth.auth().currentUser?.uid else {return}
-        Database.database().reference().child("users").child(currentUid).observeSingleEvent(of: .value) { snapshot in
-            guard let dict = snapshot.value as? [String : Any] else {return}
-            let user = User(uid: snapshot.key, dictionary: dict)
-            self.currentUser = user
-        }
-   }
-    
-    
-    @objc private func handleFetchPost() {
-        Database.database().reference().child("posts").observeSingleEvent(of: .value, with: { (snapshot) in
-            guard let dict = snapshot.value as? [String : Any] else {return}
-            dict.forEach { (key, value) in
-                let user = self.currentUser!
-                guard let postDict = value as? [String : Any] else {return}
-                let post = Post(user: user, dictionary: postDict)
-                self.posts.append(post)
-                self.collectionView.reloadData()
-            }
-        }) { (error) in
-            print("failed to fetch posts:", error.localizedDescription)
-        }
-    }
-    
-    
-    
+    // Removed Firebase fetching methods: handleFetchCurrentUser, handleFetchPost
     
     fileprivate func removePeriodicTimeObserver() {
-        isPlaying = false
-        NotificationCenter.default.removeObserver(self, name: NSNotification.Name.AVPlayerItemDidPlayToEndTime, object: player.currentItem)
+        // isPlaying = false // Don't necessarily set isPlaying to false here, just remove observer
+        NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: player.currentItem)
         
-        if let timeObserverToken = timeObserverToken {
-            player.removeTimeObserver(timeObserverToken)
-            self.timeObserverToken = nil
-            player.replaceCurrentItem(with: nil)
+        if let token = timeObserverToken {
+            player.removeTimeObserver(token)
+            timeObserverToken = nil
+        }
+        // Do not set player.currentItem to nil here, as it might be needed by the visible cell
+        // player.replaceCurrentItem(with: nil)
+        playerLayer.removeFromSuperlayer() // Remove old layer before adding to a new cell
+        // print("stopped firing period observer, removed playerLayer")
+    }
+    
+    fileprivate func handleFetchVideoFromCachingManagerUsing(urlString: String, completion: @escaping (URL?) -> ()) {
+        // Assuming CacheManager.shared exists and is correctly implemented (e.g., VideoCacheManager.swift)
+        CacheManager.shared.getFileWith(stringUrl: urlString) { result in
+            switch result {
+            case .success(let url):
+                completion(url)
+            case .failure(let error):
+                print("Error fetching video from cache or network: \(error)")
+                completion(nil)
+            }
+        }
+    }
+        
+    func initializeVideoPlayer(url: URL, cell: VerticalFeedCell) {
+        removePeriodicTimeObserver() // Clean up previous observers and player layer
+
+        player.replaceCurrentItem(with: AVPlayerItem(url: url))
+        playerLayer.player = player // Assign player to existing layer
+        playerLayer.frame = cell.bounds // Update frame
+        playerLayer.videoGravity = .resizeAspectFill // Fill the cell bounds
+
+        // Ensure layer is added to the correct view in cell (e.g., cell.postImageView.layer)
+        // and only if it's not already there or if the cell is new.
+        if playerLayer.superlayer == nil {
+             cell.postImageView.layer.addSublayer(playerLayer)
+        } else if playerLayer.superlayer != cell.postImageView.layer {
             playerLayer.removeFromSuperlayer()
-            print("stopped firing period observer")
+            cell.postImageView.layer.addSublayer(playerLayer)
+        }
+
+        cell.handleResetCellUI() // Rotates disc jockey view, hides play button overlay
+        player.play()
+        isPlaying = true
+        currentVerticalCell = cell // Set current cell
+
+        let timeScale = CMTimeScale(NSEC_PER_SEC)
+        let time = CMTime(seconds: 0.001, preferredTimescale: timeScale)
+
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: time, queue: .main) { [weak self] (progressTime) in
+            guard let self = self, self.player.currentItem != nil else { return }
+            // Progress view logic removed as MainTabBarController's progressView is gone.
+            // If a per-cell progress is desired, it should be handled in VerticalFeedCell.
+            self.handlePlayAnimation(show: false) // Hide loading animation if it was showing
+        }
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(playerDidPlayToEndTime),
+                                               name: .AVPlayerItemDidPlayToEndTime, object: player.currentItem)
+    }
+
+    @objc fileprivate func playerDidPlayToEndTime(notification: Notification) {
+        player.seek(to: .zero)
+        player.play()
+        if let cell = currentVerticalCell {
+            cell.rotateView(view: cell.discJockeyView) // Keep disc spinning
         }
     }
     
-        
-        ///grabs video url from our caching manager
-     fileprivate func handleFetchVideoFromCachingManagerUsing(urlString: String, completion: @escaping (URL?) -> ()) {
-           CacheManager.shared.getFileWith(stringUrl: urlString) { result in
-               
-               switch result {
-               case .success(let url):
-                   // do some magic with path to saved video
-                   completion(url)
-                   break;
-               case .failure(let error):
-                   // handle errror
-                   completion(nil)
-                   print(error, "failed to find value of key\(urlString) in cache and also synchroniously failed to fetch video from our remote server, most likely a network issue like lack of connectivity or database failure")
-                   break;
-               }
-           }
-       }
-        
-        
-      fileprivate  func initializeVideoPlayer(url: URL, cell: VerticalFeedCell) {
-            removePeriodicTimeObserver()
-            guard let maintabbarController = UIApplication.shared.keyWindow?.rootViewController as? MainTabBarController else {return}
-            maintabbarController.progressView.setProgress(0, animated: false)
-            player.replaceCurrentItem(with: nil) //this right here removes all previes players before initializing
-            let player = AVPlayer(url: url)
-            let playerLayer = AVPlayerLayer(player: player)
-            playerLayer.frame = cell.bounds
-            playerLayer.videoGravity = AVLayerVideoGravity.resizeAspect
-            self.player = player
-            self.playerLayer = playerLayer
-            cell.postImageView.layer.addSublayer(playerLayer) // we added it to imageview layer so we will be able to pinch to zoom videos as well
-            cell.handleResetCellUI()
-            player.play()
-            isPlaying = true
-            let timeScale = CMTimeScale(NSEC_PER_SEC)
-            let time = CMTime(seconds: 0.001, preferredTimescale: timeScale) //fires every 0.001 seconds
-        
-            timeObserverToken = self.player.addPeriodicTimeObserver(forInterval: time, queue: DispatchQueue.main, using: { [weak self] (progressTime) in
-                guard let self = self else {return}
-                guard let currentItemDuration = self.player.currentItem?.duration else {return}
-                let durationInSeconds = CMTimeGetSeconds(currentItemDuration)
-                guard durationInSeconds.isFinite else {return} //prevents crashes
-                if progressTime != currentItemDuration {
-                    maintabbarController.progressView.setProgress(Float(CMTimeGetSeconds(progressTime)) / Float(durationInSeconds), animated: true)
-                    
-                    self.handlePlayAnimation(show: false)
-
-
-
-                } else {
-                    maintabbarController.progressView.setProgress(0, animated: false)
-                }
-            })
-            
-            NotificationCenter.default.addObserver(self, selector: #selector(playerDidPlayToEndTime),
-                                                   name: NSNotification.Name.AVPlayerItemDidPlayToEndTime, object: player.currentItem)
+    private func playVideoForVisibleCells() {
+        let visibleCells = verticalCollectionView.visibleCells.compactMap { $0 as? VerticalFeedCell }
+        if let cell = visibleCells.first, let post = cell.post { // Play for the first fully visible cell
+            handleSetUpVideoPlayer(cell: cell, videoUrlString: post.videoURL)
         }
-        
-    
-    @objc fileprivate func playerDidPlayToEndTime(notification: Notification) {
-          player.seek(to: CMTime.zero)
-          player.play()
-       }
-    
+    }
 }
 
-
-
-
-
-//MARK: - CollectionView Delegates
+//MARK: - CollectionView Delegates for Vertical Feed
 extension HomeFeedController: UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        return posts.count
+    }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        if indexPath.item == 0 {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: FOLLOWING_CELL_ID, for: indexPath) as! BaseHomeFeedCell
-            cell.backgroundColor = UIColor.clear
-            cell.delegate = self
-            cell.posts = posts
-            return cell
-        } else {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: FORYOU_CELL_ID, for: indexPath) as! BaseHomeFeedCell
-            cell.backgroundColor = .clear
-            cell.delegate = self
-            cell.posts = posts
-            return cell
-        }
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: VERTICAL_CELL_ID, for: indexPath) as! VerticalFeedCell
+        cell.post = posts[indexPath.item]
+        cell.delegate = self // Set delegate for play/pause button taps
+        return cell
     }
-    
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        return CGSize(width: view.frame.width, height: view.frame.height)
-    }
-    
-    
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return 2
+        // Ensure cells are full screen, accounting for safe areas if navigation bar/status bar were visible
+        return CGSize(width: view.frame.width, height: verticalCollectionView.frame.height)
     }
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
         return 0
     }
-
     
-     func scrollToMenuIndex(menuIndex: Int) {
-        //this is a bug for ios 13
-            collectionView.isPagingEnabled = false
-            let indexPath = IndexPath(item: menuIndex, section: 0)
-            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
-            collectionView.isPagingEnabled = true
+    // Autoplay logic when scrolling stops & Brand Preference Prompt
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        playVideoForVisibleCells()
+
+        // Check for brand preference prompt
+        if !UserPreferences.shared.getHasShownBrandPrompt() {
+            // A simple way to count "pages" scrolled.
+            // This assumes each deceleration is roughly a new page.
+            // More sophisticated logic might track actual distance or index changes.
+            scrollCountSinceLastPrompt += 1
+
+            print("Scroll count: \(scrollCountSinceLastPrompt)") // For debugging
+
+            if scrollCountSinceLastPrompt >= scrollsNeededForPrompt {
+                presentBrandPreferences()
+                scrollCountSinceLastPrompt = 0 // Reset counter
+            }
+        }
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            playVideoForVisibleCells()
+        }
+        // Note: Prompt logic is primarily in scrollViewDidEndDecelerating to avoid multiple triggers
+        // during a single scroll-drag-release action.
+    }
+
+    private func presentBrandPreferences() {
+        let allBrands = mockDataService.fetchBrands()
+        let selectedIDs = UserPreferences.shared.getSelectedBrandIDs()
+        
+        let preferencesVC = BrandPreferencesViewController(allBrands: allBrands, selectedBrandIDs: selectedIDs)
+        preferencesVC.delegate = self
+        
+        let navController = UINavigationController(rootViewController: preferencesVC)
+        // For PanModal presentation, ensure `preferencesVC` itself conforms to `PanModalPresentable`
+        // and set `navController.isNavigationBarHidden = true` if PanModal provides its own chrome,
+        // or configure PanModal to work with the nav bar.
+        // If `BrandPreferencesViewController` is already PanModal ready, can present `navController` using PanModal.
+        // However, standard modal presentation is simpler here for a full-screen takeover.
+        if UIDevice.current.userInterfaceIdiom == .pad {
+             navController.modalPresentationStyle = .formSheet
+        } else {
+             navController.modalPresentationStyle = .pageSheet // Or .fullScreen
         }
         
-        
-        
-        
-    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-            
-            
-            let index = targetContentOffset.pointee.x / view.frame.width
-            
-            let indexPath = IndexPath(item: Int(index), section: 0)
-            
-            
-            tikTokMenuBar.collectionView.selectItem(at: indexPath, animated: true, scrollPosition: [])
-            tikTokMenuBar.handleScrollSlideBar(indexPath: indexPath)
-            
-            
-
+        // Pause video before presenting modal
+        if player.rate != 0 {
+            player.pause()
+            currentVerticalCell?.stopRotatingView(view: currentVerticalCell!.discJockeyView)
         }
+        
+        present(navController, animated: true) {
+            // Set flag only after successful presentation and first time.
+            // Or better, set it when the user dismisses the preferences screen for the first time.
+            // For this iteration, setting it on presentation is simpler.
+            if !UserPreferences.shared.getHasShownBrandPrompt() {
+                 UserPreferences.shared.setHasShownBrandPrompt(true)
+            }
+        }
+    }
     
- }
+    // Pause video of cells that are about to be hidden
+    func collectionView(_ collectionView: UICollectionView, didEndDisplaying cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        if let videoCell = cell as? VerticalFeedCell, videoCell == currentVerticalCell {
+            // Only pause if this cell was the one actively playing
+            if player.rate != 0 { // Check if player is playing
+                 player.pause()
+                 isPlaying = false // Update global playing state
+                 videoCell.stopRotatingView(view: videoCell.discJockeyView) // Stop disc animation
+                 // Do not remove playerLayer here, it's managed by initializeVideoPlayer
+                 // Do not set currentVerticalCell to nil here, let playVideoForVisibleCells handle it
+            }
+        }
+    }
+}
 
 
+// MARK: - BrandPreferencesViewControllerDelegate
+extension HomeFeedController: BrandPreferencesViewControllerDelegate {
+    func brandPreferencesViewController(_ controller: BrandPreferencesViewController, didFinishWithSelectedBrandIDs selectedIDs: [String]) {
+        UserPreferences.shared.saveSelectedBrandIDs(selectedIDs)
 
+        // Reload data with new preferences
+        // Pause player before reloading
+        if player.rate != 0 {
+            player.pause()
+            // isPlaying = false // Already handled by viewWillDisappear or cell didEndDisplaying
+        }
+        // It's crucial to reset player state that might be tied to old cells/items
+        removePeriodicTimeObserver()
+        currentVerticalCell = nil // No cell is "current" after a full reload
 
+        loadMockData() // This will now use the new preferences
+    }
+}
 
-//MARK: - BaseHomeFeedCellDelegate
-extension HomeFeedController: BaseHomeFeedCellDelegate {
+//MARK: - VerticalFeedCellDelegate
+extension HomeFeedController: VerticalFeedCellDelegate {
+    func didTapLikeButton(for post: PostDataModel, cell: VerticalFeedCell) {
+        if let index = self.posts.firstIndex(where: { $0.id == post.id }) {
+            self.posts[index].isLiked = post.isLiked
+            self.posts[index].likes = post.likes
+
+            // Optional: To confirm data is updated in the controller's source
+            // print("Updated post in HomeFeedController: ID \(self.posts[index].id), Liked: \(self.posts[index].isLiked), Likes: \(self.posts[index].likes)")
+
+            // The cell already updates its UI. If further non-local UI updates were needed,
+            // you might reload the cell, but it's often not necessary for just a like.
+            // verticalCollectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+        }
+    }
+
+    func didTapViewProduct(for post: PostDataModel, cell: VerticalFeedCell) {
+        guard let product = mockDataService.fetchProducts().first(where: { $0.id == post.productID }) else {
+            print("Error: Product not found for ID \(post.productID)")
+            return
+        }
+        let brand = mockDataService.fetchBrands().first(where: { $0.id == product.brandID })
+
+        let productOverlayVC = ProductDetailsOverlayVC(product: product, brand: brand)
+        presentPanModal(productOverlayVC)
+    }
+
+    func handleDidTapExitController(cell: VerticalFeedCell) {
+        // Not used in this simplified feed
+    }
     
-    
-   
-    
+    func didTapCommentTextViewInCell(currentCell: VerticalFeedCell) {
+        // Placeholder for comment functionality (currently removed from cell)
+        // print("Comment tapped for post: \(currentCell.post?.id ?? "N/A")")
+    }
     
     func handleSetUpVideoPlayer(cell: VerticalFeedCell, videoUrlString: String) {
-        handlePlayAnimation(show: true)
-        //to cancel out currently playing player
-        currentVerticalCell = cell
-        handleFetchVideoFromCachingManagerUsing(urlString: videoUrlString) {[weak self] (url) in
-            guard let self = self, let urlUnwrapped = url else {return}
-            self.initializeVideoPlayer(url: urlUnwrapped, cell: cell)
+        if currentVerticalCell == cell && player.rate != 0 && player.error == nil {
+            // If the current cell is already playing this video, do nothing
+            // or ensure UI is in correct playing state (e.g. disc spinning)
+            cell.rotateView(view: cell.discJockeyView)
+            return
+        }
+
+        // If another cell was playing, pause its video and stop its animation
+        if let previousCell = currentVerticalCell, previousCell != cell {
+            // Check if player is associated with previous cell and pause
+             if player.currentItem != nil { // A simple check, more robust would be to track player item per cell
+                player.pause() // Pause the shared player
+             }
+            previousCell.stopRotatingView(view: previousCell.discJockeyView)
+        }
+
+        handlePlayAnimation(show: true) // Show loading animation
+        currentVerticalCell = cell // Set the new current cell
+
+        handleFetchVideoFromCachingManagerUsing(urlString: videoUrlString) { [weak self] (url) in
+            guard let self = self, let urlUnwrapped = url else {
+                self.handlePlayAnimation(show: false) // Hide loading animation if URL fetch fails
+                return
+            }
+            // Ensure we are still working with the same cell, in case of quick scrolls
+            if self.currentVerticalCell == cell {
+                 self.initializeVideoPlayer(url: urlUnwrapped, cell: cell)
+            } else {
+                // The cell has changed since we started fetching, abort.
+                // Another call to handleSetUpVideoPlayer will occur for the new current cell.
+                self.handlePlayAnimation(show: false)
+            }
         }
     }
     
-    func didTapPlayButton(play: Bool) {
-        if play == true && isPlaying == false {
+    func didTapPlayButton(play: Bool, cell: VerticalFeedCell) { // This is from VerticalFeedCell's own pause/play overlay
+        if play && player.currentItem != nil {
             player.play()
             isPlaying = true
-        } else if play == false && isPlaying == true {
+            // Ensure the correct cell's disc is rotating if it's the current one
+            if cell == currentVerticalCell {
+                 currentVerticalCell?.rotateView(view: currentVerticalCell!.discJockeyView)
+            }
+        } else {
             player.pause()
             isPlaying = false
+            if cell == currentVerticalCell {
+                 currentVerticalCell?.stopRotatingView(view: currentVerticalCell!.discJockeyView)
+            }
         }
     }
-    
 }
