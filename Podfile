@@ -14,9 +14,6 @@ target 'TikTok' do
   pod 'Firebase/Core', '~> 11.14.0'
   pod 'Firebase/Messaging', '~> 11.14.0'
   pod 'SVProgressHUD'
-  pod 'SwiftVideoGenerator'
-  pod 'EasyTipView', '~> 2.1'
-  pod 'PryntTrimmerView'
+  pod 'NextLevelSessionExporter', '~> 0.4.7'
   pod 'lottie-ios', '~> 4.5.2'
-  pod 'PanModal'
 end
