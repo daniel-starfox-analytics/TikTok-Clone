@@ -890,7 +890,7 @@ public func handleSetUpAttributedText(titleString: String, secondString: String,
 
 
 
-public func saveVideoTobeUploadedToServerToTempDirectory(sourceURL: URL, completion: ((_ outputUrl: URL) -> Void)? = nil)
+public func saveVideoTobeUploadedToServerToTempDirectory(sourceURL: URL, completion: ((_ outputUrl: URL?) -> Void)? = nil) async
 {
     let fileManager = FileManager.default
     //        let documentDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -898,8 +898,18 @@ public func saveVideoTobeUploadedToServerToTempDirectory(sourceURL: URL, complet
     let documentDirectory = NSURL.fileURL(withPath: NSTemporaryDirectory(), isDirectory: true)
     
     let asset = AVAsset(url: sourceURL)
-    let length = Float(asset.duration.value) / Float(asset.duration.timescale)
-    print("video length: \(length) seconds")
+    // Asynchronously load duration
+    do {
+        let duration = try await asset.load(.duration)
+        let lengthInSeconds = CMTimeGetSeconds(duration)
+        if lengthInSeconds.isFinite {
+            print("video length: \(lengthInSeconds) seconds")
+        } else {
+            print("Video duration is not available or invalid.")
+        }
+    } catch {
+        print("Error loading video duration: \(error)")
+    }
     
     var outputURL = documentDirectory.appendingPathComponent("output")
     do {
@@ -917,16 +927,23 @@ public func saveVideoTobeUploadedToServerToTempDirectory(sourceURL: URL, complet
     exportSession.outputFileType = AVFileType.mp4
     
    
+    // It's better to wrap the export session in an async function as well
+    // For simplicity in this step, we'll keep its completion handler style
+    // but ideally, the entire function would return 'URL?' async.
     exportSession.exportAsynchronously {
         switch exportSession.status {
         case .completed:
             print("exported at \(outputURL)")
             completion?(outputURL)
         case .failed:
-            print("failed \(exportSession.error.debugDescription)")
+            print("failed \(String(describing: exportSession.error?.localizedDescription))")
+            completion?(nil)
         case .cancelled:
-            print("cancelled \(exportSession.error.debugDescription)")
-        default: break
+            print("cancelled \(String(describing: exportSession.error?.localizedDescription))")
+            completion?(nil)
+        default:
+            completion?(nil)
+            break
         }
     }
 }

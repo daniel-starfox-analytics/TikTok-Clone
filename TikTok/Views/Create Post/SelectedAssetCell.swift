@@ -42,8 +42,38 @@ class SelectedAssetCell: UICollectionViewCell {
             let width = (frame.width * 4)
             let size = CGSize(width: width, height: width)
             imageView.image = getAssetThumbnail(asset: asset, size: size)
-            let videoLegthInString = String(format: "%02d:%02d",Int((asset.duration / 60)),Int(asset.duration) % 60)
-            videoDurationLabel.text = videoLegthInString
+
+            videoDurationLabel.text = "--:--" // Placeholder
+            Task {
+                do {
+                    let duration = try await asset.load(.duration)
+                    let durationInSeconds = CMTimeGetSeconds(duration)
+                    if durationInSeconds.isFinite && !durationInSeconds.isNaN {
+                        let minutes = Int(durationInSeconds / 60)
+                        let seconds = Int(durationInSeconds.truncatingRemainder(dividingBy: 60))
+                        let videoLengthString = String(format: "%02d:%02d", minutes, seconds)
+                        await MainActor.run {
+                             // Check if the asset is still the same, in case the cell was reused
+                            if self.phAsset == asset {
+                                self.videoDurationLabel.text = videoLengthString
+                            }
+                        }
+                    } else {
+                        await MainActor.run {
+                            if self.phAsset == asset {
+                                self.videoDurationLabel.text = "00:00"
+                            }
+                        }
+                    }
+                } catch {
+                    print("Error loading duration for asset \(asset.localIdentifier) in SelectedAssetCell: \(error)")
+                    await MainActor.run {
+                        if self.phAsset == asset {
+                            self.videoDurationLabel.text = "00:00" // Or some error indicator
+                        }
+                    }
+                }
+            }
         }
     }
     

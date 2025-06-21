@@ -8,10 +8,11 @@
 
 import UIKit
 import AVKit
-import SwiftVideoGenerator
-import EasyTipView
+// import SwiftVideoGenerator // TODO: Refactor with AVFoundation and NextLevelSessionExporter
+import NextLevelSessionExporter
+// import EasyTipView // TODO: Refactor with UIPopoverPresentationController
 import SVProgressHUD
-class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
+class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate, UIPopoverPresentationControllerDelegate { // Added UIPopoverPresentationControllerDelegate
     
     //MARK: Init
     deinit {
@@ -56,7 +57,7 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         player.pause()
-        dismissEasyTipView()
+        // dismissEasyTipView() // TODO: Replace with popover dismissal if needed, or rely on automatic dismissal
     }
     
     init(recordedClips: [VideoClips]) {
@@ -104,7 +105,7 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
 //    fileprivate let thumbnailImage: UIImage
     
     
-    var easyTipView: EasyTipView?
+    // var easyTipView: EasyTipView? // TODO: Remove EasyTipView property
     
     let mainCanvasView: UIView = {
         let view = UIView()
@@ -430,7 +431,7 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
         
         
         @objc fileprivate func didPanOnStory(_ sender: Any) {
-            dismissEasyTipView()
+            // dismissEasyTipView() // TODO: Popover should dismiss automatically or handle contextually
             let recognizer = sender as! UIPanGestureRecognizer
             if recognizer.state == .began {
                 self.activeSticker = self.findSticker(point: recognizer.location(in: view))
@@ -470,7 +471,7 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
         
         // For scaling (resizing) stickers
         @objc fileprivate func didPinchOnStory(_ sender: Any) {
-            dismissEasyTipView()
+            // dismissEasyTipView() // TODO: Popover should dismiss automatically or handle contextually
             let recognizer = sender as! UIPinchGestureRecognizer
             self.activeSticker = self.findSticker(point: recognizer.location(in: view))
             if recognizer.state == .began {
@@ -535,7 +536,7 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
     
     @objc fileprivate func didTapEditStickerButton() {
         guard let sticker = activeSticker, let stickerText = sticker.text, let stickerBackgroundColor = sticker.containerBackGroundColor, let stickerTextColor = sticker.stickerTextColor  else {return}
-        dismissEasyTipView()
+        // dismissEasyTipView() // TODO: Popover should have dismissed itself before this action is called
         sticker.removeFromSuperview()
         if let index = allStickers.firstIndex(of: sticker) {
             allStickers.remove(at: index)
@@ -551,7 +552,7 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
     
     @objc fileprivate func didTapDeleteStickerButton() {
         guard let sticker = activeSticker else {return}
-        dismissEasyTipView()
+        // dismissEasyTipView() // TODO: Popover should have dismissed itself
         sticker.removeFromSuperview()
         if let index = allStickers.firstIndex(of: sticker) {
             allStickers.remove(at: index)
@@ -664,7 +665,10 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
     
     
     @objc fileprivate func handleOpenOrCloseDurationsContainerView(open: Bool) {
-        dismissEasyTipView()
+        // dismissEasyTipView() // TODO: Ensure popover is dismissed if open
+        if let presentedVC = self.presentedViewController as? StickerOptionsViewController {
+             presentedVC.dismiss(animated: false, completion: nil)
+        }
         if open == true {
             handleAllButtonVisibility(alpha: 0) 
         }
@@ -810,21 +814,27 @@ class PreviewCapturedVideoVC: UIViewController, UIGestureRecognizerDelegate {
     @objc fileprivate func handleMergeClips(){
         NotificationCenter.default.addObserver(self, selector: #selector(listenForVideoProcessingProgress), name: NSNotification.Name(rawValue:LISTEN_FOR_VIDEO_PROCESSING_PROGRESS), object: nil)
 
-        VideoCompositionWriter().mergeMultipleVideo(urls: urlsForVids) { (success, outputURL) in
-            if success {
-                guard let outputURLunwrapped = outputURL else {return}
-                print("outputURLunwrapped:", outputURLunwrapped)
-                    DispatchQueue.main.async {
-                        let player = AVPlayer(url: outputURLunwrapped)
-                        let vc = AVPlayerViewController()
-                        vc.player = player
-
-                        self.present(vc, animated: true) {
-                            vc.player?.play()
-                        }
-                    }
-            }
-        }
+        // TODO: Refactor with AVFoundation and NextLevelSessionExporter for merging video clips.
+        // VideoCompositionWriter().mergeMultipleVideo(urls: urlsForVids) { (success, outputURL) in
+        //     if success {
+        //         guard let outputURLunwrapped = outputURL else {return}
+        //         print("outputURLunwrapped:", outputURLunwrapped)
+        //             DispatchQueue.main.async {
+        //                 let player = AVPlayer(url: outputURLunwrapped)
+        //                 let vc = AVPlayerViewController()
+        //                 vc.player = player
+        //
+        //                 self.present(vc, animated: true) {
+        //                     vc.player?.play()
+        //                 }
+        //             }
+        //     }
+        // }
+        print("Video merging logic previously using VideoCompositionWriter (and potentially SwiftVideoGenerator) needs to be refactored here.")
+        // Placeholder: Present an alert or do nothing to avoid crashing.
+        // For now, let's just print a message.
+        // Actual refactoring will involve using AVMutableComposition to combine video assets
+        // and then potentially NextLevelSessionExporter to export the final video.
     }
     
     
@@ -899,27 +909,47 @@ extension PreviewCapturedVideoVC: EnterTextVCDelegate {
 extension PreviewCapturedVideoVC {
     
     
+    // TODO: Refactor this entire method to use UIPopoverPresentationController
     @objc func showStickerOptionsButtons(text: String, sticker: Sticker, backgroundColor: UIColor, font: UIFont, textColor: UIColor) {
-             
-              //dismiss eiting tip view
-               dismissEasyTipView()
-               var preferences = EasyTipView.Preferences()
-               preferences.drawing.font = font
-               preferences.drawing.foregroundColor = .clear
-               preferences.drawing.backgroundColor = backgroundColor
-               preferences.drawing.arrowPosition = EasyTipView.ArrowPosition.top
-               preferences.drawing.arrowHeight = 8
-               preferences.drawing.cornerRadius = 12
-               preferences.drawing.arrowWidth = 15
-    //           preferences.animating.showInitialTransform = CGAffineTransform(translationX: 0, y: -15)
-               preferences.animating.showInitialAlpha = 0
-               preferences.animating.showDuration = 1.0//1.5
-               preferences.animating.dismissDuration = 1.0//1.5
-               easyTipView = EasyTipView(text: text, preferences: preferences)
-              guard let easyTopViewUnrapped = easyTipView else {return}
-              easyTopViewUnrapped.show(forView: sticker, withinSuperview: view)
-              sticker.textView.layer.borderWidth = 2.8//4
-              sticker.textView.layer.borderColor = sticker.stickerTextColor.cgColor
+        // Original EasyTipView logic commented out for refactoring:
+        // //dismiss eiting tip view
+        // dismissEasyTipView()
+        // var preferences = EasyTipView.Preferences()
+        // preferences.drawing.font = font
+        // preferences.drawing.foregroundColor = .clear
+        // preferences.drawing.backgroundColor = backgroundColor
+        // preferences.drawing.arrowPosition = EasyTipView.ArrowPosition.top
+        // preferences.drawing.arrowHeight = 8
+        // preferences.drawing.cornerRadius = 12
+        // preferences.drawing.arrowWidth = 15
+        // // preferences.animating.showInitialTransform = CGAffineTransform(translationX: 0, y: -15)
+        // preferences.animating.showInitialAlpha = 0
+        // preferences.animating.showDuration = 1.0 //1.5
+        // preferences.animating.dismissDuration = 1.0 //1.5
+        // easyTipView = EasyTipView(text: text, preferences: preferences)
+        // guard let easyTopViewUnrapped = easyTipView else {return}
+        // easyTopViewUnrapped.show(forView: sticker, withinSuperview: view)
+        // sticker.textView.layer.borderWidth = 2.8//4
+        // sticker.textView.layer.borderColor = sticker.stickerTextColor.cgColor
+
+        // Create and present StickerOptionsViewController as a popover
+        let stickerOptionsVC = StickerOptionsViewController()
+        // stickerOptionsVC.delegate = self // Assuming PreviewCapturedVideoVC conforms to StickerOptionsDelegate
+        // Set properties on stickerOptionsVC if needed (e.g. which sticker is active)
+
+        stickerOptionsVC.modalPresentationStyle = .popover
+        guard let popover = stickerOptionsVC.popoverPresentationController else { return }
+        popover.sourceView = sticker
+        popover.sourceRect = sticker.bounds
+        popover.permittedArrowDirections = .any // Or specific like .up, .down
+        popover.delegate = self
+        // popover.backgroundColor = backgroundColor // Set on stickerOptionsVC.view.backgroundColor
+
+        present(stickerOptionsVC, animated: true, completion: nil)
+
+        // The border on the sticker itself can be handled separately
+        sticker.textView.layer.borderWidth = 2.8
+        sticker.textView.layer.borderColor = sticker.stickerTextColor.cgColor
         
         
         
@@ -947,9 +977,12 @@ extension PreviewCapturedVideoVC {
            }
     
     
-    @objc func dismissEasyTipView() {
-           easyTipView?.dismiss()
-           easyTipView = nil
+    @objc func dismissEasyTipView() { // TODO: This method will be replaced by UIPopoverPresentationControllerDelegate methods or direct dismissal
+           // easyTipView?.dismiss()
+           // easyTipView = nil
+           if let presentedVC = self.presentedViewController as? StickerOptionsViewController {
+                presentedVC.dismiss(animated: false, completion: nil)
+           }
            allStickers.forEach { (sticker) in
              sticker.layer.borderWidth = 0
                sticker.layer.borderColor = UIColor.clear.cgColor

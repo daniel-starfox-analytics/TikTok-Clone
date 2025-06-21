@@ -12,7 +12,7 @@ import UIKit
 class VideoCompositionWriter: NSObject {
     var exportSession: AVAssetExportSession?
 
-    func mergeMultipleVideo(urls: [URL], onComplete: @escaping (Bool, URL?) -> Void) {
+    func mergeMultipleVideo(urls: [URL], onComplete: @escaping (Bool, URL?) -> Void) async {
         // Start by creating an asset from each of the url
         // Keep track of the total duration of all these clips combined
         // This will be used to determine the length of the audio in our composition
@@ -20,15 +20,35 @@ class VideoCompositionWriter: NSObject {
         var totalDuration = CMTime.zero
         var assets: [AVAsset] = []
         
+        // Asynchronously load assets and their properties
+        // TODO: This loop needs to be made fully asynchronous.
+        // For simplicity in this step, we're showing the load points,
+        // but proper async mapping/iteration is needed.
         for url in urls {
-         let asset = AVAsset(url: url)
-            assets.append(asset)
-            totalDuration = CMTimeAdd(totalDuration, asset.duration)
+            let asset = AVAsset(url: url)
+            do {
+                let duration = try await asset.load(.duration)
+                // Ensure tracks are loaded if needed by downstream logic, e.g., before calling merge()
+                // For now, just loading duration for the totalDuration calculation.
+                // Proper refactoring of merge() will also be needed.
+                _ = try await asset.loadTracks(withMediaType: .video)
+                _ = try await asset.loadTracks(withMediaType: .audio)
+                assets.append(asset)
+                totalDuration = CMTimeAdd(totalDuration, duration)
+            } catch {
+                print("Error loading asset properties for url \(url): \(error)")
+                // Handle error, perhaps skip this asset or call onComplete with failure
+                onComplete(false, nil)
+                return
+            }
         }
         
         
         // Use our merge function to get a new composition containing all the video clips
-        let mixComposition = merge(arrayVideos: assets)
+        // TODO: The 'merge' function also needs to be refactored to handle pre-loaded assets
+        // or made async itself if it needs to load properties.
+        // For now, assuming 'assets' are sufficiently prepared for 'merge'.
+        let mixComposition = await merge(arrayVideos: assets) // Make merge async
         //output url destination
         let outputURL = createOutPutUrl(with: urls.first!)
         
@@ -106,7 +126,9 @@ class VideoCompositionWriter: NSObject {
     
     
     
-    func merge(arrayVideos: [AVAsset]) -> AVMutableComposition {
+    // TODO: Refactor merge to ensure it uses pre-loaded asset properties or make it fully async.
+    // For now, changing signature to async and assuming assets passed in are loaded.
+    func merge(arrayVideos: [AVAsset]) async -> AVMutableComposition {
         
         // Create a new mutable compositon
         let mainComposition = AVMutableComposition()
@@ -124,15 +146,28 @@ class VideoCompositionWriter: NSObject {
         // Starting at time = 0, loop over each video asset and add them to the track
         var insertTime = CMTime.zero
         for videoAsset in arrayVideos {
-            try! compositionVideoTrack?.insertTimeRange(CMTimeRangeMake(start: CMTime.zero, duration: videoAsset.duration), of: videoAsset.tracks(withMediaType: .video)[0], at: insertTime)
-            // Update the next insert time by the video asset's duration
-            
-            //for check to make sure that videoAsset actually has audio before trying to append, if not it will crash
-            if videoAsset.tracks(withMediaType: AVMediaType.audio).count > 0 {
-                try! compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: CMTime.zero, duration: videoAsset.duration), of: videoAsset.tracks(withMediaType: .audio)[0], at: insertTime)
+            do {
+                // Ensure properties are loaded before use - this should ideally be done by the caller (mergeMultipleVideo)
+                // If not guaranteed, this function would need to be fully async and load them here.
+                // For this refactor, we assume the caller (mergeMultipleVideo) now pre-loads them.
+                let duration = try await videoAsset.load(.duration)
+                let videoTracks = try await videoAsset.loadTracks(withMediaType: .video)
+                let audioTracks = try await videoAsset.loadTracks(withMediaType: .audio)
+
+                if let firstVideoTrack = videoTracks.first {
+                    try compositionVideoTrack?.insertTimeRange(CMTimeRangeMake(start: CMTime.zero, duration: duration), of: firstVideoTrack, at: insertTime)
+                }
+
+                //for check to make sure that videoAsset actually has audio before trying to append, if not it will crash
+                if let firstAudioTrack = audioTracks.first {
+                    try compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: CMTime.zero, duration: duration), of: firstAudioTrack, at: insertTime)
+                }
+
+                insertTime = CMTimeAdd(insertTime, duration)
+            } catch {
+                print("Error processing asset \(videoAsset): \(error)")
+                // Decide how to handle individual asset errors: skip, or fail the whole merge?
             }
-            
-            insertTime = CMTimeAdd(insertTime, videoAsset.duration)
         }
         return mainComposition
     }

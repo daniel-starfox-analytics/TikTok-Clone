@@ -126,8 +126,42 @@ extension PreviewSelectedAssetsView: UICollectionViewDelegate, UICollectionViewD
         let size = PHImageManagerMaximumSize
         cell.imageView.image = getAssetThumbnail(asset: asset, size: size)
         cell.phAsset = asset
-        let videoLegthInString = String(format: "%02d:%02d",Int((asset.duration / 60)),Int(asset.duration) % 60)
-        cell.videoDurationLabel.text = videoLegthInString
+        // Clear previous duration text
+        cell.videoDurationLabel.text = "--:--" // Placeholder
+
+        // Asynchronously load duration and update cell
+        // TODO: This Task should be managed by the cell itself if it can be recycled before completion.
+        Task {
+            do {
+                let duration = try await asset.load(.duration)
+                let durationInSeconds = CMTimeGetSeconds(duration)
+                if durationInSeconds.isFinite && !durationInSeconds.isNaN {
+                    let minutes = Int(durationInSeconds / 60)
+                    let seconds = Int(durationInSeconds.truncatingRemainder(dividingBy: 60))
+                    let videoLengthString = String(format: "%02d:%02d", minutes, seconds)
+
+                    if cell.phAsset == asset { // Ensure cell hasn't been recycled
+                        await MainActor.run {
+                            cell.videoDurationLabel.text = videoLengthString
+                        }
+                    }
+                } else {
+                    if cell.phAsset == asset {
+                        await MainActor.run {
+                            cell.videoDurationLabel.text = "00:00"
+                        }
+                    }
+                }
+            } catch {
+                print("Error loading duration for asset \(asset.localIdentifier) in PreviewSelectedAssetsView: \(error)")
+                if cell.phAsset == asset {
+                    await MainActor.run {
+                        cell.videoDurationLabel.text = "00:00" // Or some error indicator
+                    }
+                }
+            }
+        }
+
         cell.delegate = self
         checkIfMediaIsSelected(asset: asset, cell: cell)
         return cell

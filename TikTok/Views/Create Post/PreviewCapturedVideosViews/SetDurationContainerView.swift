@@ -14,7 +14,7 @@
 //
 
 import UIKit
-import PryntTrimmerView
+// import PryntTrimmerView // TODO: Implement custom trimmer UI and integrate
 import AVKit
 import SVProgressHUD
 class SetDurationContainerView: UIView {
@@ -108,20 +108,33 @@ class SetDurationContainerView: UIView {
         return view
     }()
     
-    
-    
-    lazy var trimmerView: TrimmerView = {
-        let trimmerView = TrimmerView()
-        trimmerView.handleColor = UIColor.white
-        trimmerView.mainColor = tikTokRed
-        trimmerView.positionBarColor = .white
-        trimmerView.translatesAutoresizingMaskIntoConstraints = false
-        trimmerView.layer.cornerRadius = 5
-        trimmerView.clipsToBounds = true
-        trimmerView.maxDuration = Double(Int.max)// means no limit
-//        trimmerView.delegate = self
-        trimmerView.minDuration = 3
-        return trimmerView
+    // TODO: Replace PryntTrimmerView with a custom UI component
+    // lazy var trimmerView: TrimmerView = {
+    //     let trimmerView = TrimmerView()
+    //     trimmerView.handleColor = UIColor.white
+    //     trimmerView.mainColor = tikTokRed
+    //     trimmerView.positionBarColor = .white
+    //     trimmerView.translatesAutoresizingMaskIntoConstraints = false
+    //     trimmerView.layer.cornerRadius = 5
+    //     trimmerView.clipsToBounds = true
+    //     trimmerView.maxDuration = Double(Int.max)// means no limit
+    // //        trimmerView.delegate = self
+    //     trimmerView.minDuration = 3
+    //     return trimmerView
+    // }()
+
+    // Placeholder for the custom trimmer view
+    lazy var customTrimmerViewPlaceholder: UIView = {
+        let view = UIView()
+        view.backgroundColor = .darkGray
+        let label = UILabel()
+        label.text = "Trimmer Placeholder"
+        label.textColor = .white
+        label.textAlignment = .center
+        view.addSubview(label)
+        label.frame = view.bounds
+        label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        return view
     }()
     
     
@@ -129,7 +142,8 @@ class SetDurationContainerView: UIView {
     fileprivate func setUpViews() {
         addSubview(selectedDurationLabel)
         addSubview(playButton)
-        addSubview(trimmerView)
+        // addSubview(trimmerView) // Original
+        addSubview(customTrimmerViewPlaceholder) // New Placeholder
         addSubview(bottomLineSeperator)
         addSubview(cancelButton)
         addSubview(cancelButtonTapGestureView)
@@ -147,8 +161,8 @@ class SetDurationContainerView: UIView {
         playButton.constrainWidth(constant: 20)
         
         
-        trimmerView.anchor(top: selectedDurationLabel.bottomAnchor, leading: selectedDurationLabel.leadingAnchor, bottom: nil, trailing: playButton.trailingAnchor, padding: .init(top: 25, left: 8, bottom: 0, right: 5), size: .init(width: 0, height: 45))
-        
+        // trimmerView.anchor(top: selectedDurationLabel.bottomAnchor, leading: selectedDurationLabel.leadingAnchor, bottom: nil, trailing: playButton.trailingAnchor, padding: .init(top: 25, left: 8, bottom: 0, right: 5), size: .init(width: 0, height: 45))
+        customTrimmerViewPlaceholder.anchor(top: selectedDurationLabel.bottomAnchor, leading: selectedDurationLabel.leadingAnchor, bottom: nil, trailing: playButton.trailingAnchor, padding: .init(top: 25, left: 8, bottom: 0, right: 5), size: .init(width: 0, height: 45))
         
         bottomLineSeperator.anchor(top: nil, leading: leadingAnchor, bottom: bottomAnchor, trailing: trailingAnchor, padding: .init(top: 0, left: 0, bottom: 55, right: 0), size: .init(width: 0, height: 0.3))
         
@@ -192,17 +206,39 @@ class SetDurationContainerView: UIView {
     
     fileprivate func handleSetTrimmerAsset() {
         let asset = AVAsset(url: videoUrl)
-        DispatchQueue.main.async {
-            self.trimmerView.asset = asset 
+        // TODO: Load asset into custom trimmer view
+        // DispatchQueue.main.async {
+        //     self.trimmerView.asset = asset
+        // }
+        Task {
+            // This is just to ensure the placeholder is visible if asset is set.
+            // The actual asset loading for the custom trimmer would be more involved.
+            await MainActor.run {
+                 customTrimmerViewPlaceholder.isHidden = false
+            }
+            await handleExtracVideoFrames() // Call the async version
         }
     }
     
     fileprivate var videoThumbnails: [UIImage] = [UIImage]()
-    func handleExtracVideoFrames() {
+    func handleExtracVideoFrames() async { // Made async
            
           let asset = AVAsset(url: videoUrl)
-          let duration = asset.duration
+          // Asynchronously load duration
+          let duration: CMTime
+          do {
+              duration = try await asset.load(.duration)
+          } catch {
+              print("Error loading video duration in SetDurationContainerView: \(error)")
+              // Handle error appropriately
+              return
+          }
+
           let seconds = CMTimeGetSeconds(duration)
+          guard seconds.isFinite, seconds > 0 else {
+              print("Invalid video duration in SetDurationContainerView: \(seconds)")
+              return
+          }
           let addition = seconds / 15
           var number = 1.0
           let imageGenerator = AVAssetImageGenerator(asset: asset)

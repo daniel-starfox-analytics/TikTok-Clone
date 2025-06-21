@@ -9,7 +9,7 @@
 import UIKit
 import AVKit
 import Photos
-import PryntTrimmerView
+// import PryntTrimmerView // TODO: Implement custom trimmer UI and integrate
 class TrimVideoVC: UIViewController {
     
     
@@ -125,13 +125,27 @@ class TrimVideoVC: UIViewController {
     }()
 
     
-    fileprivate lazy var trimmerView: TrimmerView = {
-        let trimmerView = TrimmerView()
-        trimmerView.mainColor = tikTokRed
-        trimmerView.handleColor = .white
-        trimmerView.delegate = self
-        trimmerView.maxDuration = .infinity
-        return trimmerView
+    // fileprivate lazy var trimmerView: TrimmerView = {
+    //     let trimmerView = TrimmerView()
+    //     trimmerView.mainColor = tikTokRed
+    //     trimmerView.handleColor = .white
+    //     trimmerView.delegate = self
+    //     trimmerView.maxDuration = .infinity
+    //     return trimmerView
+    // }()
+    // TODO: Implement custom trimmer UI and integrate
+    // Placeholder for the trimmer view
+    fileprivate lazy var customTrimmerViewPlaceholder: UIView = {
+        let view = UIView()
+        view.backgroundColor = .darkGray // Placeholder appearance
+        let label = UILabel()
+        label.text = "Custom Trimmer UI Placeholder"
+        label.textColor = .white
+        label.textAlignment = .center
+        view.addSubview(label)
+        label.frame = view.bounds
+        label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        return view
     }()
    
     
@@ -176,22 +190,34 @@ class TrimVideoVC: UIViewController {
         cancelButton.anchor(top: nil, leading: view.leadingAnchor, bottom: nil, trailing: nil, padding: .init(top: 0, left: 5, bottom: 0, right: 0), size: .init(width: 45, height: 45))
         cancelButton.centerYAnchor.constraint(equalTo: nextButton.centerYAnchor).isActive = true
         
-        view.addSubview(trimmerView)
-        trimmerView.anchor(top: nil, leading: view.leadingAnchor, bottom: view.safeAreaLayoutGuide.bottomAnchor, trailing: view.trailingAnchor, padding: .init(top: 0, left: 35, bottom: 30, right: 35), size: .init(width: 0, height: 55))
+        // view.addSubview(trimmerView)
+        // trimmerView.anchor(top: nil, leading: view.leadingAnchor, bottom: view.safeAreaLayoutGuide.bottomAnchor, trailing: view.trailingAnchor, padding: .init(top: 0, left: 35, bottom: 30, right: 35), size: .init(width: 0, height: 55))
+        // TODO: Implement custom trimmer UI and integrate
+        view.addSubview(customTrimmerViewPlaceholder)
+        customTrimmerViewPlaceholder.anchor(top: nil, leading: view.leadingAnchor, bottom: view.safeAreaLayoutGuide.bottomAnchor, trailing: view.trailingAnchor, padding: .init(top: 0, left: 35, bottom: 30, right: 35), size: .init(width: 0, height: 55))
+
         
-        trimmerView.asset = asset
-        trimmerView.asset = asset
+        // trimmerView.asset = asset
+        // trimmerView.asset = asset
+        // TODO: Load asset into custom trimmer
         
         
         view.addSubview(selectedTimeLabel)
-        selectedTimeLabel.anchor(top: nil, leading: trimmerView.leadingAnchor, bottom: trimmerView.topAnchor, trailing: nil, padding: .init(top: 0, left: -20, bottom: 16, right: 0))
-        
+        // selectedTimeLabel.anchor(top: nil, leading: trimmerView.leadingAnchor, bottom: trimmerView.topAnchor, trailing: nil, padding: .init(top: 0, left: -20, bottom: 16, right: 0))
+        // TODO: Adjust selectedTimeLabel constraints relative to customTrimmerViewPlaceholder or new UI
+        selectedTimeLabel.anchor(top: nil, leading: customTrimmerViewPlaceholder.leadingAnchor, bottom: customTrimmerViewPlaceholder.topAnchor, trailing: nil, padding: .init(top: 0, left: -20, bottom: 16, right: 0))
+
         
         view.addSubview(rotateButton)
-        rotateButton.anchor(top: nil, leading: nil, bottom: trimmerView.topAnchor, trailing: trimmerView.trailingAnchor, padding: .init(top: 0, left: 0, bottom: 16, right: 0))
+        // rotateButton.anchor(top: nil, leading: nil, bottom: trimmerView.topAnchor, trailing: trimmerView.trailingAnchor, padding: .init(top: 0, left: 0, bottom: 16, right: 0))
+        // TODO: Adjust rotateButton constraints
+        rotateButton.anchor(top: nil, leading: nil, bottom: customTrimmerViewPlaceholder.topAnchor, trailing: customTrimmerViewPlaceholder.trailingAnchor, padding: .init(top: 0, left: 0, bottom: 16, right: 0))
+
        
         view.addSubview(timerButton)
-        timerButton.anchor(top: nil, leading: nil, bottom: trimmerView.topAnchor, trailing: rotateButton.leadingAnchor, padding: .init(top: 0, left: 0, bottom: 16, right: 10))
+        // timerButton.anchor(top: nil, leading: nil, bottom: trimmerView.topAnchor, trailing: rotateButton.leadingAnchor, padding: .init(top: 0, left: 0, bottom: 16, right: 10))
+        // TODO: Adjust timerButton constraints
+        timerButton.anchor(top: nil, leading: nil, bottom: customTrimmerViewPlaceholder.topAnchor, trailing: rotateButton.leadingAnchor, padding: .init(top: 0, left: 0, bottom: 16, right: 10))
         
         
         view.addSubview(pausePlayButton)
@@ -227,12 +253,20 @@ class TrimVideoVC: UIViewController {
         let timeScale = CMTimeScale(NSEC_PER_SEC)
         let time = CMTime(seconds: 0.001, preferredTimescale: timeScale) //fires every 0.001 seconds
         timeObserverToken = self.player.addPeriodicTimeObserver(forInterval: time, queue: DispatchQueue.main, using: { [weak self] (progressTime) in
+            // TODO: Implement custom trimmer UI and integrate
+            // guard let self = self,
+            //       let startTime = self.trimmerView.startTime, let endTime = self.trimmerView.endTime else {return}
+            // let trimmedTime: Int = Int(CMTimeGetSeconds(endTime)  - CMTimeGetSeconds(startTime))
             
-            guard let self = self,
-                  let startTime = self.trimmerView.startTime, let endTime = self.trimmerView.endTime else {return}
-            let trimmedTime: Int = Int(CMTimeGetSeconds(endTime)  - CMTimeGetSeconds(startTime))
-            
-            guard let currentItemDuration = self.player.currentItem?.duration else {return}
+            guard let currentItem = self.player.currentItem, currentItem.status == .readyToPlay else {
+                // Item not ready, duration might be invalid.
+                // Consider if a placeholder or early return is needed if duration is critical here.
+                // For now, if currentItemDuration was essential for subsequent lines before its own guard,
+                // this check makes it safer. The existing `totalDurationInSeconds.isFinite` guard
+                // likely handles cases where duration might be kCMTimeInvalid.
+                return
+            }
+            let currentItemDuration = currentItem.duration // Safe to access now
             let totalDurationInSeconds = CMTimeGetSeconds(currentItemDuration)
             
             guard totalDurationInSeconds.isFinite else {return}
@@ -246,10 +280,12 @@ class TrimVideoVC: UIViewController {
             guard totalDurationInSeconds.isFinite else {return} //prevents crashes
             
             //moves trimmer view position bar to current cmtime
-            let playerCurrentCMTime = player.currentTime()
-            self.trimmerView.seek(to: playerCurrentCMTime)
+            // let playerCurrentCMTime = player.currentTime() // player is self.player
+            // self.customTrimmerViewPlaceholder.seek(to: playerCurrentCMTime) // TODO: Update custom trimmer UI
             
-            self.selectedTimeLabel.text =  String(format: "%02d:%02d",Int((trimmedTime / 60)),Int(trimmedTime) % 60) + "s" + " " + "selected"
+            // self.selectedTimeLabel.text =  String(format: "%02d:%02d",Int((trimmedTime / 60)),Int(trimmedTime) % 60) + "s" + " " + "selected"
+            // TODO: Update selectedTimeLabel based on custom trimmer's selected range.
+            // This calculation needs valid startTime and endTime from the custom trimmer.
             
         })
     }
@@ -330,7 +366,9 @@ class TrimVideoVC: UIViewController {
     
     
     @objc func aVPlayerItemDidPlayToEndTime(notification: Notification) {
-        let newCMStartTime = trimmerView.startTime ?? CMTime.zero
+        // TODO: Update with custom trimmer logic
+        // let newCMStartTime = trimmerView.startTime ?? CMTime.zero
+        let newCMStartTime = CMTime.zero // Placeholder, get actual start time from custom trimmer
         player.seek(to: newCMStartTime)
         player.play()
         player.rate = currentPlayRate
@@ -361,24 +399,26 @@ class TrimVideoVC: UIViewController {
     }
 }
 
-//MARK: - TrimmerViewDelegate
-extension TrimVideoVC: TrimmerViewDelegate {
-    func didChangePositionBar(_ playerTime: CMTime) {
-        guard let startCmTime = trimmerView.startTime, let endCmTime = trimmerView.endTime else {return}
-        player.seek(to: startCmTime)
-        handlePausePlay(play: true)
-        //     //sets player's newend cmtime to trimmerview endtime
-        player.currentItem?.forwardPlaybackEndTime = endCmTime
-        guard let startTime = self.trimmerView.startTime, let endTime = self.trimmerView.endTime else {return}
-        let trimmedTime: Int = Int(CMTimeGetSeconds(endTime)  - CMTimeGetSeconds(startTime))
-        selectedTimeLabel.text =  String(format: "%02d:%02d",Int((trimmedTime / 60)),Int(trimmedTime) % 60) + "s" + " " + "selected"
-    
-    }
-    
-    func positionBarStoppedMoving(_ playerTime: CMTime) {}
-    
-    
-}
+//MARK: - CustomVideoTrimmerDelegate (New Delegate)
+// TODO: Implement custom trimmer UI and integrate its delegate
+// extension TrimVideoVC: CustomVideoTrimmerDelegate {
+//     func trimmerView(_ trimmerView: CustomVideoTrimmerView, didChangePositionTo startTime: CMTime, endTime: CMTime) {
+//         player.seek(to: startTime)
+//         handlePausePlay(play: true)
+//         player.currentItem?.forwardPlaybackEndTime = endTime
+//
+//         let trimmedTime: Int = Int(CMTimeGetSeconds(endTime) - CMTimeGetSeconds(startTime))
+//         if CMTimeGetSeconds(endTime).isFinite && CMTimeGetSeconds(startTime).isFinite {
+//             selectedTimeLabel.text =  String(format: "%02d:%02d",Int((trimmedTime / 60)),Int(trimmedTime) % 60) + "s" + " " + "selected"
+//         } else {
+//             selectedTimeLabel.text = "--:--"
+//         }
+//     }
+//
+//     func trimmerViewDidEndDragging(_ trimmerView: CustomVideoTrimmerView) {
+//         // Potentially finalize player seeking or update UI
+//     }
+// }
 
 //MARK: - VideoSpeedViewDelegate
 extension TrimVideoVC: VideoSpeedViewDelegate {
